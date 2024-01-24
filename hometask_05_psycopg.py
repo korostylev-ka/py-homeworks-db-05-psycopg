@@ -3,7 +3,8 @@ import csv
 import psycopg2
 import configparser
 
-class ClientsDB():
+
+class ClientsDB:
 
     def __init__(self):
         config = configparser.ConfigParser()
@@ -121,115 +122,47 @@ class ClientsDB():
                 print(f'There is no client with id {id}')
         cur.close()
 
-    def get_client_by_field(self):
-        field = 0
-        field_choose = 0
-        field_name = ""
-        while True:
-            field = input('Please input column name you want to find:\n1 - First name\n2 - Second name\n3 - Email\n')
-            if (field == '1') or (field == '2') or (field == '3'):
-                field_choose = int(field)
-                break
-            else:
-                print('Error. Try more time')
-        if field_choose == 1:
-            field_name = "first_name"
-        elif field_choose == 2:
-            field_name = "second_name"
-        elif field_choose == 3:
-            field_name = "email"
-        field_value = input(f"Please enter value of {field_name}\n")
+    def get_client(self, first_name="%%", second_name="%%", email="%%", phone_number="%%"):
         with self.connect.cursor() as cur:
             clients_list = []
-            client_info_list = []
-            client_phone_list = []
+            clients_id_list = []
             # get client id(maybe several id's, if clients hava same name and second name)
             cur.execute(f"""
-                        SELECT id FROM client WHERE {field_name} = %s;
-                        """, (field_value,))
+                        SELECT id FROM client WHERE first_name ILIKE '{first_name}' AND second_name ILIKE '{second_name}' 
+                        AND email ILIKE '{email}';
+                        """, (first_name, second_name, email, phone_number))
             id_list = cur.fetchall()
-            # get client info
+            for id in id_list:
+                clients_id_list.append(id[0])
             cur.execute(f"""
-                        SELECT first_name, second_name, email FROM client WHERE {field_name} = %s;
-                        """, (field_value,))
-            # client_info_list = cur.fetchall()
-            clients = cur.fetchall()
-            print(clients)
-            for client in clients:
-                client_dict = {'First name:': '', 'Second name:': '', 'Email:': '', 'Phone:': []}
-                client_dict['First name:'] = client[0]
-                client_dict['Second name:'] = client[1]
-                client_dict['Email:'] = client[2]
-                clients_list.append(client_dict)
-                client_info_list.append(list(client))
-            # get client phones if exist
-            for index, value in enumerate(id_list):
-                user_phones = []
-                cur.execute("""
-                            SELECT phone_number FROM phone WHERE (client_id = %s);
-                            """, value)
-                phones = cur.fetchall()
-                for phone in phones:
-                    user_phones.append(phone[0])
-                # If client doesn't has phone number
-                if len(user_phones) == 0:
-                    user_phones.append('NO PHONE NUMBER')
-                client_phone_list.append(user_phones)
-                clients_list[index]['Phone:'] = user_phones
-            print(clients_list)
+                        SELECT client_id FROM phone WHERE phone_number LIKE '{phone_number}';
+                        """, (phone_number,))
+            client_with_phone_number = cur.fetchall()
+            # if we have client with phone number
+            if (len(client_with_phone_number) > 0):
+                client_id_phone = client_with_phone_number[0][0]
+                #check, that same id is in list of id's, got by first_name, second_name, email
+                if client_id_phone in clients_id_list:
+                    clients_id_list = [client_id_phone]
+                else:
+                    #if false, return empty result
+                    clients_id_list = []
+            for id in clients_id_list:
+                client = self.__get_client_by_id__(id)
+                clients_list.append(client)
             fieldnames = ["First name", "Second name", "Email", "Phones"]
-            with open(f'get_by_field_{field_name}_{field_value}.csv', 'w') as f:
+            # prepare fields for file name
+            first_name_f = first_name if first_name != '%%' else 'any'
+            second_name_f= second_name if second_name != '%%' else 'any'
+            email_f = email if email != '%%' else 'any'
+            phone_f = phone_number if phone_number != '%%' else 'any'
+            file_name = f'get_by_first_name={first_name_f}_second_name={second_name_f}_email={email_f}_phone_number={phone_f}.csv'
+            with open(file_name, 'w') as f:
                 writer = csv.writer(f, delimiter=';')
                 writer.writerow(fieldnames)
                 for client in clients_list:
                     writer.writerow(client.values())
-        cur.close()
-
-    def get_client_by_name(self, first_name: str):
-        with self.connect.cursor() as cur:
-            clients_list = []
-            client_info_list = []
-            client_phone_list = []
-            # get client id(maybe several id's, if clients hava same name and second name)
-            cur.execute("""
-                        SELECT id FROM client WHERE (first_name = %s);
-                        """, (first_name,))
-            id_list = cur.fetchall()
-            # get client info
-            cur.execute("""
-                        SELECT first_name, second_name, email FROM client WHERE (first_name = %s);
-                        """, (first_name,))
-            # client_info_list = cursor.fetchall()
-            clients = cur.fetchall()
-            for client in clients:
-                client_dict = {'First name:': '', 'Second name:': '', 'Email:': '', 'Phone:': []}
-                client_dict['First name:'] = client[0]
-                client_dict['Second name:'] = client[1]
-                client_dict['Email:'] = client[2]
-                clients_list.append(client_dict)
-                client_info_list.append(list(client))
-            # get client phones if exist
-            for index, value in enumerate(id_list):
-                user_phones = []
-                cur.execute("""
-                            SELECT phone_number FROM phone WHERE (client_id = %s);
-                            """, value)
-                phones = cur.fetchall()
-                for phone in phones:
-                    user_phones.append(phone[0])
-                # If client doesn't has phone number
-                if len(user_phones) == 0:
-                    user_phones.append('NO PHONE NUMBER')
-                client_phone_list.append(user_phones)
-                clients_list[index]['Phone:'] = user_phones
-            print(clients_list)
-            fieldnames = ["First name", "Second name", "Email", "Phones"]
-            with open(f'get_by_name_{first_name}.csv', 'w') as f:
-                writer = csv.writer(f, delimiter=';')
-                writer.writerow(fieldnames)
-                for client in clients_list:
-                    writer.writerow(client.values())
-        cur.close()
+            return clients_list
 
     def get_client_by_phone(self, phone_number: str):
         with self.connect.cursor() as cur:
@@ -251,12 +184,18 @@ class ClientsDB():
                 writer.writerow(client_info.values())
             return client_info
 
-
-    def edit_client(self, id, first_name, second_name, email: int):
+    def edit_client(self, id, first_name='', second_name='', email=''):
+        client = self.__get_client_by_id__(id)
+        old_first_name = client.get('First name:')
+        old_second_name = client.get('Second name:')
+        old_email = client.get('Email:')
+        new_first_name = first_name if first_name != '' else old_first_name
+        new_second_name = second_name if second_name != '' else old_second_name
+        new_email = email if email != '' else old_email
         with self.connect.cursor() as cur:
             cur.execute("""
                 UPDATE client SET first_name = %s, second_name = %s, email = %s WHERE id = %s RETURNING id;
-                """, (first_name, second_name, email, id))
+                """, (new_first_name, new_second_name, new_email, id))
             client_id = cur.fetchone()
             self.connect.commit()
         cur.close()
@@ -273,19 +212,18 @@ class ClientsDB():
             self.connect.commit()
         cur.close()
 
-client = ClientsDB()
-client.create_tables()
-client.add_client("Petya", "Petrov", "mail@mail.ru")
-client.add_client("Vasya", "Ivanov", "mail2@mail.ru")
-client.add_client("Vasya", "Sidorov", "mail3@mail.ru")
-client.add_phone_number(1, "89045400000")
-client.add_phone_number(1, "89045400001")
-client.add_phone_number(2, "89045400002")
-client.delete_phone_number("89045400001")
-client.edit_client(1,"Petya2", "Petrov2", "mail",)
-client.get_client_by_phone("89045400002")
-client.get_client_by_name("Petya")
-client.get_client_by_field()
-
-
-
+if __name__ == '__main__':
+    client = ClientsDB()
+    client.create_tables()
+    client.add_client("Petya", "Petrov", "mail@mail.ru")
+    client.add_client("Vasya", "Ivanov", "mail2@mail.ru")
+    client.add_client("Vasya", "Sidorov", "mail3@mail.ru")
+    client.add_phone_number(2, "89045400000")
+    client.add_phone_number(1, "89045400001")
+    client.add_phone_number(2, "89045400002")
+    client.delete_phone_number("89045400001")
+    client.get_client_by_phone("89045400002")
+    print(client.get_client(first_name="vasya", phone_number="89045400000"))
+    print(client.__get_client_by_id__(1))
+    client.edit_client(1, first_name="Kolya")
+    client.edit_client(2, second_name="Vasilyev", email="mail4@gmail.com")
